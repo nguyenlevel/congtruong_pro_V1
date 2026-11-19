@@ -39,6 +39,8 @@ enabled = true
 enable_signup = false
 site_url = "http://localhost:3000"
 additional_redirect_urls = []
+# Access token lifetime (seconds). Owner decision: 3600. Hosted project must match in Dashboard.
+jwt_expiry = 3600
 
 [auth.expo_template]
 enabled = true

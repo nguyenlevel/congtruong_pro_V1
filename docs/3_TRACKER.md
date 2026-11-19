@@ -26,7 +26,7 @@
 - [x] Zod Schemas tại `packages/contracts/src/schemas` (Worker + common)
 - [x] Repository abstraction tại `packages/database`
 - [/] WatermelonDB Local Schema + Worker/Outbox adapter tại `apps/mobile/src/database/` (đã tích hợp App; còn native smoke test/migrations runtime)
-- [/] Khung Sync Engine (`packages/sync-engine`: outbox, queue, retry, conflict, cursor, audit) — có `createSyncEngine` (flush/pull/audit) + transport Supabase cho `worker` (`apps/mobile/src/sync`), chưa gọi tự động từ app; chưa có luồng đăng nhập
+- [/] Khung Sync Engine (`packages/sync-engine`: outbox, queue, retry, conflict, cursor, audit) — có `createSyncEngine` (flush/pull/audit) + transport Supabase cho `worker` (`apps/mobile/src/sync`), mobile đã đăng nhập Supabase và tự sync qua `use-auto-sync`; chưa có bằng chứng chạy trên thiết bị/emulator
 - [x] Migrations + RLS cơ bản (rbac, tenancy, workers) + seed + RLS tests stub
 - [ ] Bổ sung bảng cho 13 module nghiệp vụ (chờ pipeline mỗi module)
 

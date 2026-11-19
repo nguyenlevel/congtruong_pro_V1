@@ -97,7 +97,7 @@ Ghi chú: P0-06 là blocker bảo mật thật sự, cần quyết định thi�
 | P1-01 | Hoàn thiện nghiệm thu 007b và M-E (PENDING ACCEPTANCE) | Không có nghiệm thu thì không có nền tảng RBAC/audit đã chấp nhận |
 | P1-02 | Thêm migration `sub_contractors` và gán nhà thầu phụ vào `project_companies` | Yêu cầu MVP mục 3 |
 | P1-03 | UI web quản lý công ty, dự án, thành viên dự án | Luồng 1–3 cần giao diện |
-| P1-04 | Sửa `is_project_member` không lọc `projects.deleted_at` (lỗi H3) | Truy cập dự án đã xóa mềm |
+| P1-04 | Sửa `is_project_member` không lọc `projects.deleted_at` (lỗi H3). **Trạng thái:** audit xong; test active/không-thành-viên/thu hồi đã thêm (`is_project_member.test.sql`), chưa chạy vì Docker không chạy; bản sửa cần migration mới, chờ duyệt | Truy cập dự án đã xóa mềm |
 | P1-05 | Chuyển `'SYS_ADMIN'` và role literal sang bảng `roles` (M-A) | Nhất quán RBAC |
 | P1-06 | Sync retry/idempotency kiểm trên Supabase thật (integration test có Supabase local) | Yêu cầu mục 1 (phiên trước) |
 | P1-07 | Xử lý logout: bảo toàn outbox `pending_sync`, cảnh báo người dùng | Yêu cầu mục 3 (phiên trước); hiện mobile còn giữ dữ liệu, chưa có policy đầy đủ |
