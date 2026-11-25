@@ -18,6 +18,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json,css,yml}\"",
     "architecture:check": "tsx scripts/check-architecture.ts",
     "check:dependencies": "tsx scripts/check-dependencies.ts",
+    "seed:e2e": "tsx scripts/seed-local-e2e.ts",
     "validate:env": "tsx scripts/validate-env.ts",
     "db:generate-types": "tsx scripts/generate-types.ts",
     "database-reset": "tsx scripts/database-reset.ts",

@@ -16,8 +16,8 @@ describe('listMyTenants', () => {
             return {
               order: async () => ({
                 data: [
-                  { tenant_id: TENANT_A, tenants: { name: 'Công ty A' } },
-                  { tenant_id: TENANT_B, tenants: [{ name: 'Công ty B' }] },
+                  { tenant_id: TENANT_A, role: 'SITE_MANAGER', tenants: { name: 'Công ty A' } },
+                  { tenant_id: TENANT_B, role: 'WORKER', tenants: [{ name: 'Công ty B' }] },
                 ],
                 error: null,
               }),
@@ -28,8 +28,8 @@ describe('listMyTenants', () => {
     } as unknown as SupabaseClient;
 
     expect(await listMyTenants(client)).toEqual([
-      { tenantId: TENANT_A, name: 'Công ty A' },
-      { tenantId: TENANT_B, name: 'Công ty B' },
+      { tenantId: TENANT_A, name: 'Công ty A', role: 'SITE_MANAGER' },
+      { tenantId: TENANT_B, name: 'Công ty B', role: 'WORKER' },
     ]);
   });
 

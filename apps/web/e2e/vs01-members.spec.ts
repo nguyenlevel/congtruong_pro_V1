@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const PASSWORD = process.env.E2E_PASSWORD ?? '';
 if (!PASSWORD) throw new Error('Set E2E_PASSWORD to the local test account password');
 const PROJECT_NAME = 'Local Test Site A';
-const WORKER_SUB_USER_ID = '267332d3-fe44-408f-9a61-3f2a53450834';
+const WORKER_SUB_USER_ID = 'e2e10003-0000-4000-8000-000000000003'; // seeded by scripts/seed-local-e2e.ts
 
 async function login(page: Page, email: string) {
   await page.goto('/');

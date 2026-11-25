@@ -52,9 +52,6 @@ export interface InviteProjectMemberResult {
   invited: boolean;
 }
 
-/** Tenant roles that may create projects. The database (create_project) enforces the same rule. */
-export const PROJECT_CREATOR_ROLES: readonly string[] = ['SYS_ADMIN', 'SITE_MANAGER', 'PROJECT_MANAGER'];
-
 /** Roles a PROJECT_MANAGER may grant. The database enforces the same limit (assert_can_touch_role). */
 export type ManageableProjectRole = 'WORKER' | 'PROJECT_VIEWER';
 

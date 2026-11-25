@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthenticatedMember } from '@partner-os/auth';
+import { canCreateProject, canWriteRoster } from '@partner-os/auth';
+import { readWebEnv } from '../shared/config/env';
 import { loadAuthenticatedMember, selectActiveTenant } from '../features/auth/membership';
 import { WorkersListPage } from '../features/workers/pages/WorkersListPage';
 import { AttendancePage } from '../features/attendance/pages/AttendancePage';
 import { ProjectsPage } from '../features/projects/pages/ProjectsPage';
-import { PROJECT_CREATOR_ROLES } from '../features/projects/api/supabaseProjectApi';
 import { supabaseClient } from '../shared/supabase/client';
+
+const webEnv = readWebEnv(import.meta.env);
 
 type AuthState =
   | { status: 'loading' }
@@ -138,13 +141,19 @@ export default function App(): React.JSX.Element {
         <main className="p-8">Tài khoản này không có quyền xem danh sách nhân viên.</main>
       ) : (
         <>
-          <WorkersListPage key={`workers-${state.member.tenantId}`} tenantId={state.member.tenantId} />
+          <WorkersListPage
+            key={`workers-${state.member.tenantId}`}
+            tenantId={state.member.tenantId}
+            canCreate={canWriteRoster(state.member.role)}
+          />
           <ProjectsPage
             key={`projects-${state.member.tenantId}`}
             tenantId={state.member.tenantId}
-            canCreate={PROJECT_CREATOR_ROLES.includes(state.member.role)}
+            canCreate={canCreateProject(state.member.role)}
           />
-          <AttendancePage key={`attendance-${state.member.tenantId}`} tenantId={state.member.tenantId} />
+          {webEnv.features.attendance && (
+            <AttendancePage key={`attendance-${state.member.tenantId}`} tenantId={state.member.tenantId} />
+          )}
         </>
       )}
     </>

@@ -5,11 +5,16 @@ import type { Worker } from '@partner-os/domain';
 import type { WorkerRepository } from '@partner-os/database';
 import { translate } from '@partner-os/i18n';
 import { colors, spacing, typography } from '@partner-os/ui';
+import { WorkerForm } from './WorkerForm';
 
 export interface WorkersListPageProps {
   repository: WorkerRepository | null;
   /** Active tenant from the database-verified membership; only this tenant's rows are shown. */
   tenantId: string | null;
+  /** Shows the create form. A UI hint only: the database policies decide who may write. */
+  canCreate?: boolean;
+  /** Changes when local data changed elsewhere (for example a conflict was settled). */
+  reloadKey?: number;
 }
 
 /**
@@ -17,10 +22,16 @@ export interface WorkersListPageProps {
  * (WatermelonDB-backed once mobile wiring lands). When no repository is wired
  * yet, it states so instead of pretending to be connected.
  */
-export function WorkersListPage({ repository, tenantId }: WorkersListPageProps): React.JSX.Element {
+export function WorkersListPage({
+  repository,
+  tenantId,
+  canCreate = false,
+  reloadKey = 0,
+}: WorkersListPageProps): React.JSX.Element {
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [localReload, setLocalReload] = useState(0);
 
   useEffect(() => {
     if (!repository) {
@@ -45,12 +56,19 @@ export function WorkersListPage({ repository, tenantId }: WorkersListPageProps):
         setError(message);
         setLoadState('error');
       });
-  }, [repository, tenantId]);
+  }, [repository, tenantId, reloadKey, localReload]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{translate('vi', 'nav.workers')}</Text>
-      <Text style={styles.subtitle}>{translate('vi', 'common.offline')}</Text>
+
+      {canCreate && repository && tenantId && (
+        <WorkerForm
+          repository={repository}
+          tenantId={tenantId}
+          onCreated={() => setLocalReload((value) => value + 1)}
+        />
+      )}
 
       {loadState === 'loading' && <Text>{translate('vi', 'common.loading')}</Text>}
       {loadState === 'error' && (

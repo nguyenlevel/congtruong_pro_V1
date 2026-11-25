@@ -372,7 +372,9 @@ async function updateOutbox(
 export function createWatermelonDatabase(databaseName = 'partner-os'): {
   workers: LocalWorkerStore;
   attendance: LocalAttendanceStore;
-  outbox: ReturnType<typeof createOutboxStore>;
+  outbox: LocalConflictOutboxStore;
+  /** Deletes every local row, including the outbox. Callers must check there is nothing left to sync. */
+  clearAll(): Promise<void>;
 } {
   const adapter = new SQLiteAdapter({
     schema: mobileSchema,
@@ -387,5 +389,10 @@ export function createWatermelonDatabase(databaseName = 'partner-os'): {
     workers: createWorkerStore(database),
     attendance: createAttendanceStore(database),
     outbox: createOutboxStore(database),
+    async clearAll() {
+      await database.write(async () => {
+        await database.unsafeResetDatabase();
+      });
+    },
   };
 }
