@@ -57,6 +57,70 @@ describe('supabaseProjectApi', () => {
     expect(calls).toContainEqual({ table: 'projects', method: 'is', args: ['deleted_at', null] });
   });
 
+  it('creates a project through the create_project RPC', async () => {
+    const { client, calls } = fakeClient({ data: 'project-id', error: null });
+
+    const id = await createSupabaseProjectApi(client).createProject({ siteName: 'Site X', address: 'Hanoi' });
+
+    expect(id).toBe('project-id');
+    expect(calls).toContainEqual({
+      table: 'rpc',
+      method: 'create_project',
+      args: [{ p_site_name: 'Site X', p_address: 'Hanoi', p_organization_id: null }],
+    });
+  });
+
+  it('surfaces create_project database errors', async () => {
+    const { client } = fakeClient({ data: null, error: { message: 'not allowed to create projects' } });
+
+    await expect(createSupabaseProjectApi(client).createProject({ siteName: 'X' })).rejects.toThrow(
+      'not allowed to create projects',
+    );
+  });
+
+  it('invites a member by email through the invite-member Edge Function', async () => {
+    const invoked: Array<{ name: string; body: unknown }> = [];
+    const client = {
+      functions: {
+        invoke: (name: string, options: { body: unknown }) => {
+          invoked.push({ name, body: options.body });
+          return Promise.resolve({ data: { membershipId: 'm1', userId: 'u1', invited: true }, error: null });
+        },
+      },
+    } as unknown as SupabaseClient;
+
+    const result = await createSupabaseProjectApi(client).inviteProjectMember({
+      projectId: 'p1',
+      projectCompanyId: 'c1',
+      email: 'a@b.co',
+      role: 'WORKER',
+    });
+
+    expect(result).toEqual({ membershipId: 'm1', userId: 'u1', invited: true });
+    expect(invoked).toEqual([
+      { name: 'invite-member', body: { projectId: 'p1', projectCompanyId: 'c1', email: 'a@b.co', role: 'WORKER' } },
+    ]);
+  });
+
+  it('reports the JSON error returned by the Edge Function', async () => {
+    const client = {
+      functions: {
+        invoke: () =>
+          Promise.resolve({
+            data: null,
+            error: {
+              message: 'Edge Function returned a non-2xx status code',
+              context: new Response(JSON.stringify({ error: 'invites can only target the caller\'s own company' }), { status: 403 }),
+            },
+          }),
+      },
+    } as unknown as SupabaseClient;
+
+    await expect(
+      createSupabaseProjectApi(client).inviteProjectMember({ projectId: 'p', projectCompanyId: 'c', email: 'a@b.co', role: 'WORKER' }),
+    ).rejects.toThrow("invites can only target the caller's own company");
+  });
+
   it('surfaces database errors instead of returning an empty list', async () => {
     const { client } = fakeClient({ data: null, error: { message: 'permission denied' } });
 

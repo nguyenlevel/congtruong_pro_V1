@@ -18,9 +18,11 @@ const PROJECT_STATUS_LABEL: Record<Project['status'], string> = {
 export function ProjectsPage({
   tenantId,
   api: injectedApi,
+  canCreate = false,
 }: {
   tenantId: string;
   api?: ProjectApi;
+  canCreate?: boolean;
 }): React.JSX.Element {
   const api = useMemo(() => injectedApi ?? createSupabaseProjectApi(), [injectedApi]);
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -35,6 +37,43 @@ export function ProjectsPage({
   const [newMemberCompanyId, setNewMemberCompanyId] = useState('');
   const [newMemberUserId, setNewMemberUserId] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<ManageableProjectRole>('WORKER');
+  const [newSiteName, setNewSiteName] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [inviteCompanyId, setInviteCompanyId] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<ManageableProjectRole>('WORKER');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [projectsKey, setProjectsKey] = useState(0);
+
+  async function handleCreateProject(event: React.FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!newSiteName.trim()) return;
+    setActionError(null);
+    try {
+      await api.createProject({ siteName: newSiteName.trim(), address: newAddress.trim() });
+      setNewSiteName('');
+      setNewAddress('');
+      setProjectsKey((k) => k + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Không tạo được dự án.');
+    }
+  }
+
+  async function handleInvite(event: React.FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selected || !inviteCompanyId || !inviteEmail.trim()) return;
+    setNotice(null);
+    await runCompanyAction(async () => {
+      const result = await api.inviteProjectMember({
+        projectId: selected.id,
+        projectCompanyId: inviteCompanyId,
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      setInviteEmail('');
+      setNotice(result.invited ? 'Đã gửi email mời và thêm vào dự án.' : 'Đã thêm người dùng vào dự án.');
+    });
+  }
 
   useEffect(() => {
     if (!selected || selected.tenantId !== tenantId) return;
@@ -72,7 +111,7 @@ export function ProjectsPage({
       (err: unknown) => { if (active) setError(err instanceof Error ? err.message : 'Không tải được dự án.'); },
     );
     return () => { active = false; };
-  }, [api, tenantId]);
+  }, [api, tenantId, projectsKey]);
 
   useEffect(() => {
     if (!selected || selected.tenantId !== tenantId) return;
@@ -113,6 +152,20 @@ export function ProjectsPage({
     <main className="mx-auto max-w-2xl p-8">
       <h1 className="text-xl font-bold">Dự án</h1>
 
+      {canCreate && (
+        <form className="mt-4 space-y-2" onSubmit={handleCreateProject} aria-label="Tạo dự án">
+          <label className="block">
+            <span className="text-sm">Tên dự án</span>
+            <input className="mt-1 w-full border p-1" maxLength={200} value={newSiteName} onChange={(e) => setNewSiteName(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="text-sm">Địa chỉ</span>
+            <input className="mt-1 w-full border p-1" maxLength={500} value={newAddress} onChange={(e) => setNewAddress(e.target.value)} />
+          </label>
+          <button type="submit" className="border px-3 py-1" disabled={!newSiteName.trim()}>Tạo dự án</button>
+        </form>
+      )}
+      {!selected && actionError && <p className="mt-2 text-red-700" role="alert">{actionError}</p>}
       {error && <p className="mt-4 text-red-700" role="alert">{error}</p>}
       {!error && projects === null && <p className="mt-4">Đang tải...</p>}
       {projects !== null && projects.length === 0 && (
@@ -245,6 +298,31 @@ export function ProjectsPage({
               </select>
             </label>
             <button type="submit" className="border px-3 py-1" disabled={!newMemberCompanyId}>Thêm thành viên</button>
+          </form>
+
+          <form className="mt-4 space-y-2" onSubmit={handleInvite} aria-label="Mời thành viên qua email">
+            <label className="block">
+              <span className="text-sm">Công ty</span>
+              <select className="mt-1 w-full border p-1" value={inviteCompanyId} onChange={(e) => setInviteCompanyId(e.target.value)}>
+                <option value="">-- Chọn công ty --</option>
+                {companies.filter((c) => c.status === 'ACTIVE' && c.tenantId === tenantId).map((c) => (
+                  <option key={c.id} value={c.id}>{c.participationType}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm">Email</span>
+              <input className="mt-1 w-full border p-1" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="text-sm">Vai trò</span>
+              <select className="mt-1 w-full border p-1" value={inviteRole} onChange={(e) => setInviteRole(e.target.value as ManageableProjectRole)}>
+                <option value="WORKER">WORKER</option>
+                <option value="PROJECT_VIEWER">PROJECT_VIEWER</option>
+              </select>
+            </label>
+            <button type="submit" className="border px-3 py-1" disabled={!inviteCompanyId || !inviteEmail.trim()}>Mời qua email</button>
+            {notice && <p className="text-green-700" role="status">{notice}</p>}
           </form>
 
 

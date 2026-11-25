@@ -52,3 +52,6 @@ uri = "pg-functions://postgres/public/custom_access_token_hook"
 
 [analytics]
 enabled = false
+
+[functions.invite-member]
+verify_jwt = true

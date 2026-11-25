@@ -23,6 +23,8 @@ export interface ProjectCompany {
 
 export interface ProjectApi {
   listProjects(): Promise<Project[]>;
+  createProject(input: CreateProjectInput): Promise<string>;
+  inviteProjectMember(input: InviteProjectMemberInput): Promise<InviteProjectMemberResult>;
   listProjectCompanies(projectId: string): Promise<ProjectCompany[]>;
   addProjectCompany(input: AddProjectCompanyInput): Promise<string>;
   updateProjectCompany(input: UpdateProjectCompanyInput): Promise<void>;
@@ -31,6 +33,27 @@ export interface ProjectApi {
   updateProjectMemberRole(input: UpdateProjectMemberRoleInput): Promise<void>;
   removeProjectMember(membershipId: string): Promise<void>;
 }
+
+export interface CreateProjectInput {
+  siteName: string;
+  address?: string;
+}
+
+export interface InviteProjectMemberInput {
+  projectId: string;
+  projectCompanyId: string;
+  email: string;
+  role: ManageableProjectRole;
+}
+
+export interface InviteProjectMemberResult {
+  membershipId: string;
+  userId: string;
+  invited: boolean;
+}
+
+/** Tenant roles that may create projects. The database (create_project) enforces the same rule. */
+export const PROJECT_CREATOR_ROLES: readonly string[] = ['SYS_ADMIN', 'SITE_MANAGER', 'PROJECT_MANAGER'];
 
 /** Roles a PROJECT_MANAGER may grant. The database enforces the same limit (assert_can_touch_role). */
 export type ManageableProjectRole = 'WORKER' | 'PROJECT_VIEWER';
@@ -68,6 +91,20 @@ export interface UpdateProjectCompanyInput {
 }
 
 type Row = Record<string, unknown>;
+
+/** Edge Function failures carry the JSON body of the HTTP response in `context`. */
+async function readFunctionError(error: { message: string; context?: unknown }): Promise<string> {
+  const context = error.context;
+  if (context instanceof Response) {
+    try {
+      const body = (await context.clone().json()) as { error?: unknown };
+      if (typeof body.error === 'string') return body.error;
+    } catch {
+      // fall through to the generic message
+    }
+  }
+  return error.message;
+}
 
 export function toProject(row: Row): Project {
   return {
@@ -123,6 +160,34 @@ export function createSupabaseProjectApi(
       }
       const rows = (data ?? []) as unknown as Row[];
       return rows.map(toProject);
+    },
+
+    async createProject(input) {
+      const { data, error } = await client.rpc('create_project', {
+        p_site_name: input.siteName,
+        p_address: input.address ?? '',
+        p_organization_id: null,
+      });
+      if (error) {
+        throw new Error(`Failed to create project: ${error.message}`);
+      }
+      return String(data);
+    },
+
+    async inviteProjectMember(input) {
+      const { data, error } = await client.functions.invoke('invite-member', {
+        body: {
+          projectId: input.projectId,
+          projectCompanyId: input.projectCompanyId,
+          email: input.email,
+          role: input.role,
+        },
+      });
+      if (error) {
+        throw new Error(`Failed to invite member: ${await readFunctionError(error)}`);
+      }
+      const result = data as { membershipId: string; userId: string; invited: boolean };
+      return { membershipId: result.membershipId, userId: result.userId, invited: result.invited };
     },
 
     async listProjectCompanies(projectId) {

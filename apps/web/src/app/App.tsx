@@ -4,6 +4,7 @@ import { loadAuthenticatedMember, selectActiveTenant } from '../features/auth/me
 import { WorkersListPage } from '../features/workers/pages/WorkersListPage';
 import { AttendancePage } from '../features/attendance/pages/AttendancePage';
 import { ProjectsPage } from '../features/projects/pages/ProjectsPage';
+import { PROJECT_CREATOR_ROLES } from '../features/projects/api/supabaseProjectApi';
 import { supabaseClient } from '../shared/supabase/client';
 
 type AuthState =
@@ -138,7 +139,11 @@ export default function App(): React.JSX.Element {
       ) : (
         <>
           <WorkersListPage key={`workers-${state.member.tenantId}`} tenantId={state.member.tenantId} />
-          <ProjectsPage key={`projects-${state.member.tenantId}`} tenantId={state.member.tenantId} />
+          <ProjectsPage
+            key={`projects-${state.member.tenantId}`}
+            tenantId={state.member.tenantId}
+            canCreate={PROJECT_CREATOR_ROLES.includes(state.member.role)}
+          />
           <AttendancePage key={`attendance-${state.member.tenantId}`} tenantId={state.member.tenantId} />
         </>
       )}
