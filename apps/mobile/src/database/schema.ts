@@ -5,7 +5,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const mobileSchema = appSchema({
-  version: 4,
+  version: 5,
   tables: [
     tableSchema({
       name: 'workers',
@@ -57,6 +57,8 @@ export const mobileSchema = appSchema({
         { name: 'last_error', type: 'string', isOptional: true },
         { name: 'status', type: 'string' },
         { name: 'created_at', type: 'number' },
+        { name: 'server_snapshot', type: 'string', isOptional: true },
+        { name: 'server_version', type: 'number', isOptional: true },
       ],
     }),
   ],

@@ -10,3 +10,4 @@ export * from './versioning/version';
 export * from './audit/audit';
 export * from './engine/sync-engine';
 export * from './engine/create-sync-engine';
+export * from './scheduler/sync-scheduler';

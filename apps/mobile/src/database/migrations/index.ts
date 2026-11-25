@@ -46,5 +46,17 @@ export const mobileMigrations = schemaMigrations({
         }),
       ],
     },
+    {
+      toVersion: 5,
+      steps: [
+        addColumns({
+          table: 'sync_outbox',
+          columns: [
+            { name: 'server_snapshot', type: 'string', isOptional: true },
+            { name: 'server_version', type: 'number', isOptional: true },
+          ],
+        }),
+      ],
+    },
   ],
 });

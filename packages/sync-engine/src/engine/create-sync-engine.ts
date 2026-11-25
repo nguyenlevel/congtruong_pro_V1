@@ -13,6 +13,8 @@ export interface SyncOutboxPort {
   pending(limit?: number): Promise<OutboxRecord<unknown>[]>;
   markCommitted(operationId: string): Promise<void>;
   markFailed(operationId: string, error: string): Promise<void>;
+  /** Parks a record whose server copy differs. It is no longer returned by `pending`. */
+  markConflict?(operationId: string, message: string, serverPayload: unknown | null, serverVersion: number): Promise<void>;
 }
 
 export interface CreateSyncEngineOptions {
@@ -45,15 +47,35 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
   return {
     async flush(recordType) {
       const stats: SyncStats = { ...EMPTY_SYNC_STATS };
-      const records = (await outbox.pending(batchSize)).filter(
+      const all = await outbox.pending(batchSize);
+      const records = all.filter(
         (record) =>
           (recordType === undefined || record.recordType === recordType) &&
           record.retryCount < policy.maxAttempts,
       );
+      // Operations on one record must reach the server in order: an exhausted, failed or
+      // conflicting operation holds back the later operations for the same record.
+      const blocked = new Set<string>(
+        all.filter((record) => record.retryCount >= policy.maxAttempts).map((record) => record.recordId),
+      );
 
       for (const record of records) {
+        if (blocked.has(record.recordId)) continue;
         try {
           const result = await transport.push(record.operationId, record);
+          if (!result.acknowledged && result.conflict && outbox.markConflict) {
+            const message = `Conflict: server holds version ${result.conflict.serverVersion}`;
+            await outbox.markConflict(
+              record.operationId,
+              message,
+              result.conflict.serverPayload,
+              result.conflict.serverVersion,
+            );
+            blocked.add(record.recordId);
+            stats.conflicts += 1;
+            audit('conflict', record, message);
+            continue;
+          }
           if (!result.acknowledged) {
             throw new Error(`Push not acknowledged (server version ${result.serverVersion})`);
           }
@@ -61,6 +83,7 @@ export function createSyncEngine(options: CreateSyncEngineOptions): SyncEngine {
           stats.pushed += 1;
           audit('commit', record, `committed at server version ${result.serverVersion}`);
         } catch (error) {
+          blocked.add(record.recordId);
           const message = error instanceof Error ? error.message : String(error);
           await outbox.markFailed(record.operationId, message);
           stats.errors += 1;

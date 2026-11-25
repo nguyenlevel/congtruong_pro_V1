@@ -34,6 +34,8 @@ export function strategyForRecordType(
     case 'incident':
     case 'inspection':
     case 'checklist':
+    case 'worker':
+    case 'attendance':
       return 'VERSION_CHECK';
     case 'approval':
       return 'SERVER_WINS';

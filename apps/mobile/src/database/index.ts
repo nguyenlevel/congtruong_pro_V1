@@ -19,18 +19,24 @@ export interface LocalOutboxRecord {
   version: number;
   retryCount: number;
   lastError: string | null;
-  status: 'pending' | 'failed' | 'committed';
+  status: 'pending' | 'failed' | 'committed' | 'conflict';
   createdAt: number;
+  /** Server copy returned with a conflict, as JSON in the pulled-payload shape; null when there is none. */
+  serverSnapshot?: string | null;
+  /** Version the server held when the conflict was detected. */
+  serverVersion?: number | null;
 }
 
 /**
  * Unsynced = every record not yet committed by the server.
- * `failed` counts pending records that have a recorded error (retry scheduled).
+ * `failed` counts pending records that have a recorded error (retry scheduled or exhausted).
+ * `conflict` counts records parked because the server holds different data; they need a user decision.
  * `syncing` is in-flight only and is not persisted, so it is not a stored state.
  */
 export interface UnsyncedCount {
   pending: number;
   failed: number;
+  conflict: number;
   total: number;
 }
 
@@ -40,6 +46,24 @@ export interface LocalSyncOutboxStore {
   countUnsynced(tenantId?: string): Promise<UnsyncedCount>;
   markCommitted(operationId: string): Promise<void>;
   markFailed(operationId: string, error: string): Promise<void>;
+}
+
+/** Outbox operations the conflict and retry screens need on top of the sync contract. */
+export interface LocalConflictOutboxStore extends LocalSyncOutboxStore {
+  markConflict(
+    operationId: string,
+    message: string,
+    serverSnapshot: string | null,
+    serverVersion: number,
+  ): Promise<void>;
+  /** Records parked as conflicts, oldest first. */
+  conflicts(tenantId?: string): Promise<LocalOutboxRecord[]>;
+  /** Pending records whose retries are exhausted, oldest first. */
+  exhausted(maxAttempts: number, tenantId?: string): Promise<LocalOutboxRecord[]>;
+  /** Clears the error and retry count so the record is pushed again. */
+  resetRetries(operationId: string): Promise<void>;
+  /** Marks every uncommitted operation of a record as discarded. Returns how many were discarded. */
+  discardRecordOperations(recordId: string): Promise<number>;
 }
 
 /** Minimal local CRUD that WatermelonDB-backed stores implement per entity. */

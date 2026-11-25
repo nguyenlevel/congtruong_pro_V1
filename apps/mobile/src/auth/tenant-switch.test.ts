@@ -5,7 +5,7 @@ import { switchActiveTenant, UnsyncedBlockError } from './tenant-switch';
 
 const TENANT_A = 'd44c72ee-0000-4000-8000-00000000000a';
 const TENANT_B = 'd44c72ee-0000-4000-8000-00000000000b';
-const EMPTY: UnsyncedCount = { pending: 0, failed: 0, total: 0 };
+const EMPTY: UnsyncedCount = { pending: 0, failed: 0, conflict: 0, total: 0 };
 
 function outboxWith(counts: UnsyncedCount): LocalSyncOutboxStore {
   return {
@@ -42,18 +42,27 @@ describe('switchActiveTenant', () => {
   it('refuses to switch while writes are pending and does not call the database', async () => {
     const { client, rpc } = clientWith();
     const error = await captureBlock(
-      switchActiveTenant(client, outboxWith({ pending: 2, failed: 0, total: 2 }), TENANT_B),
+      switchActiveTenant(client, outboxWith({ pending: 2, failed: 0, conflict: 0, total: 2 }), TENANT_B),
     );
-    expect(error.counts).toEqual({ pending: 2, failed: 0, total: 2 });
+    expect(error.counts).toEqual({ pending: 2, failed: 0, conflict: 0, total: 2 });
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it('keeps blocking while a failed write awaits retry, and reports it as failed', async () => {
     const { client, rpc } = clientWith();
     const error = await captureBlock(
-      switchActiveTenant(client, outboxWith({ pending: 0, failed: 1, total: 1 }), TENANT_B),
+      switchActiveTenant(client, outboxWith({ pending: 0, failed: 1, conflict: 0, total: 1 }), TENANT_B),
     );
     expect(error.counts.failed).toBe(1);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('blocks while a conflict waits for a user decision', async () => {
+    const { client, rpc } = clientWith();
+    const error = await captureBlock(
+      switchActiveTenant(client, outboxWith({ pending: 0, failed: 0, conflict: 1, total: 1 }), TENANT_B),
+    );
+    expect(error.counts.conflict).toBe(1);
     expect(rpc).not.toHaveBeenCalled();
   });
 
@@ -83,7 +92,7 @@ describe('switchActiveTenant', () => {
   });
 
   it('keeps blocking after a failed sync until the retry drains the outbox', async () => {
-    const counts = { value: { pending: 0, failed: 1, total: 1 } as UnsyncedCount };
+    const counts = { value: { pending: 0, failed: 1, conflict: 0, total: 1 } as UnsyncedCount };
     const outbox = {
       async countUnsynced() {
         return counts.value;

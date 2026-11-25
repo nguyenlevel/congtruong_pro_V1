@@ -9,6 +9,7 @@ import {
 } from '@partner-os/sync-engine';
 import type {
   LocalAttendanceStore,
+  LocalConflictOutboxStore,
   LocalSyncOutboxStore,
   LocalWorkerStore,
   RemoteWorkerWrite,
@@ -36,6 +37,7 @@ export interface WorkerSyncRuntime {
 }
 
 export function toSyncOutboxPort(store: LocalSyncOutboxStore): SyncOutboxPort {
+  const conflictStore = store as Partial<LocalConflictOutboxStore>;
   return {
     async pending(limit) {
       const records = await store.pending(limit);
@@ -56,6 +58,15 @@ export function toSyncOutboxPort(store: LocalSyncOutboxStore): SyncOutboxPort {
     },
     markCommitted: (operationId) => store.markCommitted(operationId),
     markFailed: (operationId, error) => store.markFailed(operationId, error),
+    markConflict: conflictStore.markConflict
+      ? (operationId, message, serverPayload, serverVersion) =>
+          conflictStore.markConflict!(
+            operationId,
+            message,
+            serverPayload === null ? null : JSON.stringify(serverPayload),
+            serverVersion,
+          )
+      : undefined,
   };
 }
 
@@ -70,7 +81,8 @@ function parseRemoteWorker(payload: unknown): RemoteWorkerWrite['worker'] & { de
 /**
  * Applies a pulled batch locally. A record that still has a pending local
  * write is skipped: the local change is pushed first and wins until the server
- * acknowledges it.
+ * acknowledges it. A record that cannot be parsed is skipped and reported, so one
+ * bad row never blocks the rest of the sync.
  */
 async function applyRemoteBatch(
   batch: PullBatch,
@@ -81,9 +93,17 @@ async function applyRemoteBatch(
 
   for (const record of batch.records) {
     if (pendingIds.has(record.recordId)) continue;
-    const { deleted, ...worker } = parseRemoteWorker(record.payload);
-    await workers.applyRemote({ worker, version: record.version, deleted });
+    try {
+      const { deleted, ...worker } = parseRemoteWorker(record.payload);
+      await workers.applyRemote({ worker, version: record.version, deleted });
+    } catch (error) {
+      reportInvalidRecord(WORKER_RECORD_TYPE, record.recordId, error);
+    }
   }
+}
+
+function reportInvalidRecord(recordType: string, recordId: string, error: unknown): void {
+  console.warn(`Skipped invalid remote ${recordType} ${recordId}`, error);
 }
 
 export function createWorkerSyncRuntime(deps: WorkerSyncRuntimeDeps): WorkerSyncRuntime {
@@ -156,8 +176,12 @@ async function applyAttendanceRemoteBatch(
 
   for (const record of batch.records) {
     if (pendingIds.has(record.recordId)) continue;
-    const { attendance: parsed, deleted } = parseRemoteAttendance(record.payload);
-    await attendance.applyRemote({ attendance: parsed, version: record.version, deleted });
+    try {
+      const { attendance: parsed, deleted } = parseRemoteAttendance(record.payload);
+      await attendance.applyRemote({ attendance: parsed, version: record.version, deleted });
+    } catch (error) {
+      reportInvalidRecord(ATTENDANCE_RECORD_TYPE, record.recordId, error);
+    }
   }
 }
 

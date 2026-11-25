@@ -32,8 +32,9 @@ function fakeOutbox(initial: LocalOutboxRecord[]): LocalSyncOutboxStore {
     },
     async countUnsynced() {
       const unsynced = records.filter((record) => record.status !== 'committed');
-      const failed = unsynced.filter((record) => record.lastError !== null).length;
-      return { pending: unsynced.length - failed, failed, total: unsynced.length };
+      const failed = unsynced.filter((record) => record.lastError !== null && record.status !== 'conflict').length;
+      const conflict = unsynced.filter((record) => record.status === 'conflict').length;
+      return { pending: unsynced.length - failed - conflict, failed, conflict, total: unsynced.length };
     },
     async markCommitted(operationId) {
       const record = records.find((row) => row.operationId === operationId);

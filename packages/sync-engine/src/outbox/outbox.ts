@@ -1,6 +1,6 @@
 import type { OperationType } from '../operation';
 
-export const OUTBOX_RECORD_STATUSES = ['pending', 'in_flight', 'failed', 'committed'] as const;
+export const OUTBOX_RECORD_STATUSES = ['pending', 'in_flight', 'failed', 'conflict', 'committed'] as const;
 
 export type OutboxRecordStatus = (typeof OUTBOX_RECORD_STATUSES)[number];
 

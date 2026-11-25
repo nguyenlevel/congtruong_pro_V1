@@ -17,4 +17,6 @@ export class SyncOutboxModel extends Model {
   @field('last_error') lastError!: string | null;
   @field('status') status!: string;
   @field('created_at') createdAt!: number;
+  @field('server_snapshot') serverSnapshot!: string | null;
+  @field('server_version') serverVersion!: number | null;
 }

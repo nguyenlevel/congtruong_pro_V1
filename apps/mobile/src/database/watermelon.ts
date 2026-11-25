@@ -4,6 +4,7 @@ import type { Collection } from '@nozbe/watermelondb';
 import type { Attendance, Worker } from '@partner-os/domain';
 import type {
   LocalAttendanceStore,
+  LocalConflictOutboxStore,
   LocalOutboxRecord,
   LocalWorkerStore,
   UnsyncedCount,
@@ -220,7 +221,7 @@ function createAttendanceStore(database: Database): LocalAttendanceStore {
 }
 
 
-function createOutboxStore(database: Database) {
+function createOutboxStore(database: Database): LocalConflictOutboxStore {
   const collection = database.collections.get<SyncOutboxModel>('sync_outbox');
 
   const toRecord = (model: SyncOutboxModel): LocalOutboxRecord => ({
@@ -237,7 +238,11 @@ function createOutboxStore(database: Database) {
     lastError: model.lastError,
     status: model.status as LocalOutboxRecord['status'],
     createdAt: model.createdAt,
+    serverSnapshot: model.serverSnapshot ?? null,
+    serverVersion: model.serverVersion ?? null,
   });
+
+  const scopeOf = (tenantId?: string) => (tenantId ? [Q.where('tenant_id', tenantId)] : []);
 
   return {
     async enqueue(record: LocalOutboxRecord) {
@@ -256,24 +261,37 @@ function createOutboxStore(database: Database) {
           model.lastError = record.lastError;
           model.status = record.status;
           model.createdAt = record.createdAt;
+          model.serverSnapshot = record.serverSnapshot ?? null;
+          model.serverVersion = record.serverVersion ?? null;
         });
       });
     },
     async pending(limit = 50) {
+      // A record with an unresolved conflict holds back its later operations: they must reach the
+      // server in order, after the user decided what to do with the conflicting one.
+      const conflicted = new Set(
+        (await collection.query(Q.where('status', 'conflict')).fetch()).map((model) => model.recordId),
+      );
       const records = await collection
-        .query(Q.where('status', 'pending'), Q.sortBy('created_at', Q.asc), Q.take(limit))
+        .query(Q.where('status', 'pending'), Q.sortBy('created_at', Q.asc))
         .fetch();
-      return records.map(toRecord);
+      return records
+        .filter((model) => !conflicted.has(model.recordId))
+        .slice(0, limit)
+        .map(toRecord);
     },
     async countUnsynced(tenantId?: string): Promise<UnsyncedCount> {
-      const scope = tenantId ? [Q.where('tenant_id', tenantId)] : [];
       const unsynced = await collection
-        .query(Q.where('status', Q.notEq('committed')), ...scope)
+        .query(Q.where('status', Q.notEq('committed')), ...scopeOf(tenantId))
         .fetch();
-      const failed = unsynced.filter((model) => model.lastError !== null).length;
+      const conflict = unsynced.filter((model) => model.status === 'conflict').length;
+      const failed = unsynced.filter(
+        (model) => model.status !== 'conflict' && model.lastError !== null,
+      ).length;
       return {
-        pending: unsynced.length - failed,
+        pending: unsynced.length - failed - conflict,
         failed,
+        conflict,
         total: unsynced.length,
       };
     },
@@ -287,6 +305,50 @@ function createOutboxStore(database: Database) {
       await updateOutbox(database, collection, operationId, (model) => {
         model.retryCount += 1;
         model.lastError = error;
+      });
+    },
+    async markConflict(operationId, message, serverSnapshot, serverVersion) {
+      await updateOutbox(database, collection, operationId, (model) => {
+        model.status = 'conflict';
+        model.lastError = message;
+        model.serverSnapshot = serverSnapshot;
+        model.serverVersion = serverVersion;
+      });
+    },
+    async conflicts(tenantId?: string) {
+      const records = await collection
+        .query(Q.where('status', 'conflict'), ...scopeOf(tenantId), Q.sortBy('created_at', Q.asc))
+        .fetch();
+      return records.map(toRecord);
+    },
+    async exhausted(maxAttempts: number, tenantId?: string) {
+      const records = await collection
+        .query(
+          Q.where('status', 'pending'),
+          Q.where('retry_count', Q.gte(maxAttempts)),
+          ...scopeOf(tenantId),
+          Q.sortBy('created_at', Q.asc),
+        )
+        .fetch();
+      return records.map(toRecord);
+    },
+    async resetRetries(operationId: string) {
+      await updateOutbox(database, collection, operationId, (model) => {
+        model.retryCount = 0;
+        model.lastError = null;
+      });
+    },
+    async discardRecordOperations(recordId: string) {
+      return database.write(async () => {
+        const rows = await collection
+          .query(Q.where('record_id', recordId), Q.where('status', Q.notEq('committed')))
+          .fetch();
+        for (const row of rows) {
+          await row.update((model) => {
+            model.status = 'committed';
+          });
+        }
+        return rows.length;
       });
     },
   };
