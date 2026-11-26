@@ -5,6 +5,7 @@
 export const USER_ROLES = [
   'SYS_ADMIN',
   'PROJECT_VIEWER',
+  'PROJECT_MANAGER',
   'SITE_MANAGER',
   'SUB_CONTRACTOR',
   'WORKER',

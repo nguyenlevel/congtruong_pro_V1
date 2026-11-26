@@ -21,3 +21,14 @@ export async function loadAuthenticatedMember(client: SupabaseClient): Promise<A
   if (error) throw error;
   return resolveMembership(userData.user.id, MembershipsSchema.parse(data), claimData.claims);
 }
+
+/**
+ * Persists the chosen tenant in the database (which verifies membership), then refreshes the
+ * session so the next JWT carries the new selector. The database check still applies to every request.
+ */
+export async function selectActiveTenant(client: SupabaseClient, tenantId: string): Promise<void> {
+  const { error } = await client.rpc('select_active_tenant', { p_tenant_id: tenantId });
+  if (error) throw error;
+  const { error: refreshError } = await client.auth.refreshSession();
+  if (refreshError) throw refreshError;
+}

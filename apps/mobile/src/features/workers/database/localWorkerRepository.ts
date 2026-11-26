@@ -27,6 +27,8 @@ function toOutbox(
   return {
     operationId: record.operationId,
     deviceId: record.deviceId,
+    tenantId: worker.tenantId,
+    projectId: worker.projectId ?? null,
     recordType: record.recordType,
     recordId: record.recordId,
     operation: record.operation,

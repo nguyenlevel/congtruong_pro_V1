@@ -97,7 +97,12 @@ Ghi chú: P0-06 là blocker bảo mật thật sự, cần quyết định thi�
 | P1-01 | Hoàn thiện nghiệm thu 007b và M-E (PENDING ACCEPTANCE) | Không có nghiệm thu thì không có nền tảng RBAC/audit đã chấp nhận |
 | P1-02 | Thêm migration `sub_contractors` và gán nhà thầu phụ vào `project_companies` | Yêu cầu MVP mục 3 |
 | P1-03 | UI web quản lý công ty, dự án, thành viên dự án | Luồng 1–3 cần giao diện |
-| P1-04 | Sửa `is_project_member` không lọc `projects.deleted_at` (lỗi H3) | Truy cập dự án đã xóa mềm |
+| P1-01/02 | (Đã xử lý local, INTERNALLY_DONE, chưa ACCEPTED) Migration 013: policy SELECT `projects` ẩn project `deleted_at`; `is_main_contractor_manager` lọc `deleted_at`. pgTAP 82/82 PASS local. Quyết định owner: MVP không có restore project. Xem ADR-008. | Truy cập dự án đã xóa mềm |
+| P1-03 | (Đã xử lý local, INTERNALLY_DONE, chưa ACCEPTED) Migration 015: `can_run_project_company_business_write` (ACTIVE + member). Chưa có luồng nghiệp vụ nào gọi hàm. Xem ADR-008. | Trạng thái project_companies |
+| RBAC PROJECT_MANAGER (migration 018, 020) | (TESTED DB, PENDING_ACCEPTANCE; chưa ACCEPTED) Migration 018: role PROJECT_MANAGER, SITE_MANAGER giữ làm legacy. Migration 020: PROJECT_MANAGER của MAIN_CONTRACTOR quản lý Project Members trong project được phân quyền (Q-PM-2), kèm `update_project_member_role`. PM của SUBCONTRACTOR bị chặn quản lý Project Members ở DB/RPC/RLS: pgTAP `subcontractor_pm_project_members.test.sql` (11 test), E2E `pm.sub` 3/3 PASS (tiendo dòng 47). Mobile chưa có CRUD. | Mobile UI, Android device |
+| P1-04 | (Đã xử lý local, INTERNALLY_DONE, chưa ACCEPTED) Migration 014: `current_tenant_id`/`current_app_role` xác thực từ `memberships`, JWT chỉ là selector. Xem ADR-008. Rủi ro: luồng auth web/mobile UNVERIFIED. |
+| Tenant switcher MVP (phương án A: chặn chuyển khi Outbox pending) | (IMPLEMENTED + TESTED ở mức DB/unit; mobile guard 8/8; ACCEPTED theo xác nhận chủ dự án 2026-11-21; kiểm thiết bị BLOCKED: adb chưa có) Migration 016: bảng `user_active_tenant`, RPC `select_active_tenant`, hook ưu tiên tenant đã chọn. Web: dropdown khi >1 tenant (không có Outbox). Mobile: loader membership từ DB và switcher đã gắn vào `App.tsx`; cursor sync theo tenant; unit 24/24 PASS. BLOCKED: emulator/thiết bị (adb chưa có). UNVERIFIED: kiểm tay, restart app với Outbox pending, hosted. Xem ADR-008. | Chuyển tenant, cache/Outbox theo tenant |
+| P1-04 (lịch sử) | Sửa `is_project_member` không lọc `projects.deleted_at` (lỗi H3). **Trạng thái:** audit xong; test active/không-thành-viên/thu hồi đã thêm (`is_project_member.test.sql`), chưa chạy vì Docker không chạy; bản sửa cần migration mới, chờ duyệt. **Migration 012 (IMPLEMENTED + TESTED local, chưa ACCEPTED):** `supabase/migrations/20260923000012_is_project_member_soft_delete.sql`, rollback `.down.sql`, test `write_audit_membership.test.sql` (12 ca) + soft-delete case trong `is_project_member.test.sql`. `db reset` PASS; `supabase test db` 9 file / 68 test PASS; rollback kiểm chứng: chỉ ca soft-delete FAIL. Chưa commit. Chờ owner ACCEPT | Truy cập dự án đã xóa mềm |
 | P1-05 | Chuyển `'SYS_ADMIN'` và role literal sang bảng `roles` (M-A) | Nhất quán RBAC |
 | P1-06 | Sync retry/idempotency kiểm trên Supabase thật (integration test có Supabase local) | Yêu cầu mục 1 (phiên trước) |
 | P1-07 | Xử lý logout: bảo toàn outbox `pending_sync`, cảnh báo người dùng | Yêu cầu mục 3 (phiên trước); hiện mobile còn giữ dữ liệu, chưa có policy đầy đủ |
@@ -139,7 +144,7 @@ Lưu ý: các mục `packages/i18n` và `packages/ui` đã có khung; không ưu
 | CI Build & Test (run 44460394646, `32072db`) | `build-test.yml` | PASS | GitHub Actions run | VERIFIED |
 | CI Architecture Guard (run 44452054855) | `architecture-check.yml` | PASS | GitHub Actions | VERIFIED |
 | Local (sau fix) | lint, typecheck, test, architecture:check, build | PASS | Output phiên này: 65/65 test, typecheck 10/10, build 10/10 | VERIFIED local, chưa xác nhận trên CI |
-| E2E web/mobile | – | Không có | – | NOT_STARTED |
+| E2E web/mobile | – | Playwright VS-01 (`apps/web/e2e/vs01-members.spec.ts`): 3 PASS (gồm PM SUB xem dự án chỉ đọc; KNOWN GAP đã đóng) | Mobile, CRUD công ty, tenant switcher | PARTIAL (PENDING_ACCEPTANCE) |
 | Thiết bị/emulator | – | Không có | – | MISSING EVIDENCE |
 
 ---
@@ -222,5 +227,16 @@ Trạng thái: APPROVED / NOT APPROVED / WAITING FOR INFORMATION. "Quyết đị
 5. **Việc kéo dài dự án nhưng không cần cho MVP:** Thiết kế M-B..M-F đầy đủ trước khi có module nghiệp vụ; mở rộng i18n, UI kit; mở rộng audit đọc theo project trước khi có dữ liệu thật; tối ưu bundle web.
 6. **Thứ tự tối ưu:** (1) Bằng chứng và Android build → (2) gate CI → (3) quyết định P0-06 và nghiệm thu 007b/M-E → (4) M-A → (5) Chấm công vertical slice → (6) Nhật ký, Công việc, Vật tư, Nhà thầu phụ → (7) Báo cáo → (8) E2E và pilot.
 7. **Cần người dùng phê duyệt:** Mục 12 ở trên.
+
+## Cập nhật bằng chứng (2026-11-23)
+
+- `supabase test db` (commit `592c398`, DB local): **PASS**, 15 file / 140 test. Đã xác minh bằng chạy thật (xem `docs/tiendo.md` mục 37).
+- Audit DB/Security: [DATABASE_SECURITY_AUDIT.md](./DATABASE_SECURITY_AUDIT.md). Phát hiện mới: DB-SEC-01 (PROJECT_MANAGER gán được mọi role, lệch quyết định đã duyệt, cần migration mới); DB-SEC-03 (SUBCONTRACTOR không thấy dự án tham gia, quyết định RLS).
+- Audit Multi-tenant và Offline/Sync: [OFFLINE_SYNC_AUDIT.md](./OFFLINE_SYNC_AUDIT.md). Replay pull an toàn (SY-04); chuyển tenant có test chặn ghi trực tiếp (MT-04).
+- Đã xử lý (PENDING_ACCEPTANCE, không ACCEPTED): DB-SEC-04 (allowlist `write_audit`, migration 20260925000023) và DB-SEC-06 (hợp nhất `add_project_member`, migration 20260925000022), ADR-009. `supabase test db` 19 file / 188 PASS; `pnpm test` 117/117; `pnpm architecture:check` PASS. DB-SEC-02 và DB-SEC-05 đang điều tra. Android thiết bị BLOCKED.
+- Đã xử lý (PENDING_ACCEPTANCE, không ACCEPTED): DB-SEC-01 và DB-SEC-03 qua migration 021 (`supabase test db` 16 file / 151 test PASS, log `%TEMP%\partneros-gates\supabase-test-db-021.log`); Mobile project list chỉ đọc (unit 2 ca, typecheck và lint sạch, gate `pnpm test` exit 0). Bổ sung 2026-11-23: RPC thành viên kiểm chứng trên local bằng token thật (tiendo dòng 42): PM của SUB bị chặn quản lý thành viên; PM MAIN không gán được SUB_CONTRACTOR/SYS_ADMIN/PROJECT_MANAGER.
+- Chưa xác minh: ACL thực tế (`has_function_privilege`), Web E2E đầy đủ (hiện 3 PASS gồm member flows và xem chỉ đọc của PM SUB; CRUD công ty và tenant switcher chưa có E2E), Mobile project list trên thiết bị, Android thiết bị (BLOCKED).
+- Trạng thái nghiệm thu: migration 017, 018, 020 vẫn PENDING_ACCEPTANCE. VS-01 chưa ACCEPTED.
+
 
 Không tuyên bố dự án sắp hoàn thành. Chưa có bằng chứng đủ cho MVP Pilot.

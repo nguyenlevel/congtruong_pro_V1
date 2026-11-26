@@ -168,8 +168,8 @@ Ma trận role và scope đầy đủ phải nằm trong `packages/auth` và see
 | Nhật ký công trường | R, W trong công ty | R, W trong PROJECT_COMPANY | R, W, A trong project | R, W trong PROJECT_COMPANY | R |
 | Vật tư | R, W trong công ty | R, W trong PROJECT_COMPANY | R, W, A trong project | R trong PROJECT_COMPANY | R |
 | Báo cáo / xuất | R, xuất trong công ty | R, xuất trong PROJECT_COMPANY | R, xuất báo cáo tổng hợp toàn project, gồm dữ liệu cần thiết của thầu phụ, có audit (Q-PM-3) | R trong PROJECT_COMPANY, không xuất | R, xuất trong project, có audit |
-| Membership và role | M trong phạm vi được cấp | M trong PROJECT_COMPANY | Không tạo, xóa, đổi role (Q-PM-2). Chỉ phân công công việc | – | – |
-| Xóa mềm / khôi phục project | Chỉ COMPANY_ADMIN của tenant sở hữu (D-SOFT-M5) | – | – | – | – |
+| Membership và role | M trong phạm vi được cấp | M trong PROJECT_COMPANY | M trong project được phân quyền, trừ membership/role SITE_MANAGER và PROJECT_MANAGER (Q-PM-2 đã sửa, migration 020) | – | – |
+| Xóa mềm project | Theo quyền đã duyệt; không có khôi phục (restore) trong MVP | – | – | – | – |
 
 **Quy tắc chung đề xuất**
 - Không có role nào truy cập chéo tenant. Không có role nào truy cập chéo PROJECT_COMPANY, trừ PROJECT scope của Main Contractor.
@@ -179,7 +179,7 @@ Ma trận role và scope đầy đủ phải nằm trong `packages/auth` và see
 
 **Quyết định Q-PM (đã duyệt có điều kiện, ngày 2026-11-18)**
 - Q-PM-1 (đồng ý có giới hạn): PROJECT_MANAGER của Main Contractor xem thông tin liên hệ cần thiết của nhân sự thuộc các công ty tham gia project, phục vụ điều phối. Không truy cập nhân sự của project khác. Không xem thông tin cá nhân không cần thiết.
-- Q-PM-2 (không cho phép): PROJECT_MANAGER không tạo, xóa, đổi role của thành viên. COMPANY_ADMIN quản lý thành viên trong đúng scope. PROJECT_MANAGER chỉ phân công công việc.
+- Q-PM-2 (đã sửa theo quyết định của chủ dự án, addendum 2026-09-23): PROJECT_MANAGER thuộc MAIN_CONTRACTOR được xem, thêm, cập nhật và thu hồi thành viên dự án trong phạm vi project được phân quyền, và quản lý Project Companies theo permission matrix. Giới hạn bắt buộc: không cấp quyền cao hơn quyền của chính mình; không thay đổi quyền quản trị cấp COMPANY; không quản lý thành viên của tenant hoặc project khác; không tự cấp PROJECT_MANAGER; không thao tác với membership SITE_MANAGER hoặc PROJECT_MANAGER; mọi kiểm tra nằm ở DB/RPC/RLS.
 - Q-PM-3 (đồng ý có giới hạn): PROJECT_MANAGER xuất báo cáo tổng hợp toàn project, gồm dữ liệu cần thiết của thầu phụ. Chỉ xuất dữ liệu của project đang quản lý. Thông tin cá nhân giới hạn theo mục đích. Mọi lần xuất phải ghi audit log (phụ thuộc D-AUD / M-E).
 
 **Hệ quả cho triển khai:** "Thông tin liên hệ cần thiết" và "dữ liệu cần thiết" phải được định nghĩa thành danh sách cột cụ thể trước khi viết RLS/view (chưa đủ thông tin, xem hồ sơ migration). Mục này vẫn là đề xuất chờ duyệt cho đến khi chủ dự án duyệt danh sách cột.
@@ -194,7 +194,7 @@ Ma trận role và scope đầy đủ phải nằm trong `packages/auth` và see
 | **M-A** | Lớp ánh xạ role một chỗ | Permission matrix được duyệt | Bảng `role_migration_reviews` (membership hoặc project_membership id, role cũ, role đề xuất, role quyết định, người duyệt, thời điểm duyệt). Chỉ tạo đề xuất cho SITE_MANAGER. Chuyển đổi chỉ khi có `decided_role` do người duyệt nhập. Không có hàm nào tự quyết. | Drop bảng review sau khi archive. Không đổi dữ liệu membership. | Không tự chuyển khi chưa có quyết định; quyết định không được nâng quyền; mỗi bản ghi chỉ có một quyết định. |
 | **M-B** | Soft-delete | D-SOFT, D-MIG | `create or replace` helper 007b thêm `deleted_at is null`. Viết lại policy của `projects` và mọi bảng con có `project_id`. Danh sách bảng phải lấy bằng truy vấn `information_schema` trước khi viết. | Khôi phục định nghĩa cũ từ file rollback. | Project đã xóa mềm không đọc/ghi được bằng role nghiệp vụ; membership của nó vẫn còn. |
 | **M-C** | Bỏ đường cross-tenant qua SYS_ADMIN | D-SYS | Viết lại policy 001–004 dùng literal `'SYS_ADMIN'`. Không thay bằng quyền toàn cục khác. Quản trị hệ thống chỉ qua Dashboard. | Khôi phục policy cũ từ file rollback. | Không có SYS_ADMIN trong JWT đọc được tenant khác; test `membership.test.sql`, `workers.test.sql` cập nhật theo mô hình mới. |
-| **M-D** | Lịch sử xóa/khôi phục và restore | D-SOFT-M5, M-B | Bảng `project_history` (event, project, actor, thời điểm, lý do). Hàm `soft_delete_project` và `restore_project` (security definer, `search_path=''`): kiểm tra COMPANY_ADMIN của tenant sở hữu hoặc ủy quyền hợp lệ; restore không đụng `project_memberships` đã thu hồi. **Q:** kiểm tra cột thu hồi trên `project_memberships` đã có chưa. | Archive `project_history`, drop hàm. | Restore không tự khôi phục membership đã thu hồi; người không được phép bị từ chối; mọi thao tác có history. |
+| **M-D** | Lịch sử xóa mềm (đã bỏ restore khỏi MVP) | M-B | Chỉ ghi lịch sử xóa mềm project. Không triển khai hàm restore (quyết định của chủ dự án). | Archive `project_history`, drop hàm. | Thao tác xóa mềm có history; không có đường khôi phục project trong MVP. |
 | **M-E** | Audit log append-only | D-AUD | Bảng `audit_log` (id, occurred_at, actor_user_id, action, target_type, target_id, tenant_id, project_id, project_company_id, payload jsonb, request_id). Không có policy update/delete; revoke grant update/delete; trigger chặn update/delete. Ghi qua hàm security definer. Đọc: COMPANY_ADMIN của tenant. | Không có rollback xóa dữ liệu audit. Rollback chỉ gỡ hàm ghi khi chưa có dữ liệu. | Không update/delete được; người ngoài tenant không đọc được; hàm ghi từ chối actor không hợp lệ. |
 | **M-F** | Chuyển policy tenant từ claim sang DB | D-AUTH, M-A, M-B, M-C | Helper `my_tenant_ids()` và `has_project_role(...)` đọc `memberships` và `project_memberships`. Viết lại policy đang dùng `current_tenant_id()`/`current_app_role()`. Hook giữ nguyên trong giai đoạn này (không đổi theo yêu cầu). | Khôi phục policy cũ từ file rollback. | Thu hồi membership có hiệu lực ngay ở truy vấn kế tiếp, dù JWT cũ còn hạn; không cross-tenant; không cross-company. |
 
@@ -211,3 +211,16 @@ Ma trận role và scope đầy đủ phải nằm trong `packages/auth` và see
 - Có staging với dữ liệu ẩn danh hay chưa.
 - Số lượng membership và tài khoản SITE_MANAGER, SYS_ADMIN thật.
 - Danh sách bảng con có `project_id`.
+## Addendum: PROJECT_MANAGER và SITE_MANAGER (migration 018)
+
+Ngày: 2026-09-23. Trạng thái: TESTED (DB, local). Chưa ACCEPTED (chờ owner nghiệm thu).
+
+- **PROJECT_MANAGER** được thêm bằng migration `20260923000018_project_manager_role.sql`. Quyền: `project.read`, `project.write`, `contractor.read`, `contractor.write`, `report.export`. Không có `safety.approve` và `incident.approve`.
+- **SITE_MANAGER** là legacy role, giữ nguyên. Không đổi tên, không xóa, không tự chuyển membership sang PROJECT_MANAGER (D-SM-M1).
+- `is_main_contractor_manager` chấp nhận SITE_MANAGER và PROJECT_MANAGER. Hành vi cũ của SITE_MANAGER được giữ và có regression test.
+- Quản lý thành viên dự án: PROJECT_MANAGER của MAIN_CONTRACTOR được quản lý thành viên trong project được phân quyền (migration 020, quyết định Q-PM-2 đã sửa). Không được tạo hoặc thay đổi membership SITE_MANAGER/PROJECT_MANAGER; SITE_MANAGER giữ nguyên hành vi cũ.\
+- **Migration 020** `20260923000020_project_manager_members.sql` (TESTED DB, PENDING_ACCEPTANCE): thêm `update_project_member_role`, cho PROJECT_MANAGER của MAIN_CONTRACTOR thêm/sửa/thu hồi membership trong project được phân quyền. Không cấp hoặc thay đổi SITE_MANAGER/PROJECT_MANAGER, không chạm role COMPANY. Rollback: `supabase/rollbacks/20260923000020_project_manager_members.down.sql`.
+- **Attendance** (migration 019): DEFERRED/PENDING_APPROVAL, chưa triển khai và chưa nghiệm thu.
+- COMPANY_ADMIN và SITE_SUPERVISOR chưa có trong DB và **không** được thêm trong 018. Chưa chứng minh được nhu cầu và tính tương thích.
+- Restore project không thuộc MVP (quyết định của owner). Các mô tả restore trong M-D/D-SOFT-M5 cần được coi là đã bỏ.
+- Kiểm chứng: `supabase db reset` thành công. `supabase test db` có `project_manager_role.test.sql` (11 case) pass. Rollback đã chạy thành công khi chưa có membership PROJECT_MANAGER, sau đó migration được áp dụng lại.

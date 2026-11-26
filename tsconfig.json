@@ -20,5 +20,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "exclude": ["node_modules", "dist", "build", ".next", ".turbo", "supabase/.temp"]
+  "exclude": ["node_modules", "dist", "build", ".next", ".turbo", "supabase/.temp", "reference"]
 }

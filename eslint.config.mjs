@@ -14,6 +14,7 @@ export default tseslint.config(
       '**/coverage/**',
       'supabase/.temp/**',
       '**/generated/**',
+      'reference/**',
     ],
   },
   js.configs.recommended,

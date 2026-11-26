@@ -33,3 +33,12 @@ describe('UserRole type guards', () => {
     expect(isUserRole('UNKNOWN_ROLE')).toBe(false);
   });
 });
+
+describe('PROJECT_MANAGER permission matrix', () => {
+  it('manages project companies and contractors but not safety or incident approval', () => {
+    expect(roleHasPermission('PROJECT_MANAGER', 'project.write')).toBe(true);
+    expect(roleHasPermission('PROJECT_MANAGER', 'contractor.write')).toBe(true);
+    expect(roleHasPermission('PROJECT_MANAGER', 'safety.approve')).toBe(false);
+    expect(roleHasPermission('PROJECT_MANAGER', 'incident.approve')).toBe(false);
+  });
+});

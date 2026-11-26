@@ -1,32 +1,40 @@
 import { isUserRole, type UserRole } from '../roles';
 
-export interface AuthenticatedMember {
-  userId: string;
+export interface TenantMembership {
   tenantId: string;
   role: UserRole;
 }
 
+export interface AuthenticatedMember {
+  userId: string;
+  tenantId: string;
+  role: UserRole;
+  /** Every tenant the database says the user belongs to; used by the tenant switcher. */
+  tenants: readonly TenantMembership[];
+}
+
 /**
- * Refuse ambiguous memberships or token claims instead of selecting a tenant.
- * The database remains responsible for authorization.
+ * Resolve the active tenant from database memberships. The JWT tenant claim is only a
+ * selector: it must match one live membership, otherwise the session is refused and the
+ * caller must refresh or re-select a tenant. The database remains the authority.
  */
 export function resolveMembership(
   userId: string,
   memberships: readonly { user_id: string; tenant_id: string; role: string }[],
   claims: { sub?: unknown; tenant_id?: unknown; app_role?: unknown },
 ): AuthenticatedMember {
-  if (memberships.length !== 1) {
-    throw new Error('Tài khoản phải được cấp quyền vào đúng một đơn vị.');
+  const live = memberships.filter((m) => m.user_id === userId && isUserRole(m.role));
+  if (live.length === 0) {
+    throw new Error('Tài khoản chưa được cấp quyền vào đơn vị nào.');
   }
-  const member = memberships[0]!;
-  if (
-    member.user_id !== userId ||
-    claims.sub !== userId ||
-    claims.tenant_id !== member.tenant_id ||
-    claims.app_role !== member.role ||
-    !isUserRole(member.role)
-  ) {
-    throw new Error('Quyền tài khoản không hợp lệ hoặc đã thay đổi. Vui lòng liên hệ quản trị viên.');
+  const member = live.find((m) => m.tenant_id === claims.tenant_id);
+  if (!member || claims.sub !== userId || claims.app_role !== member.role) {
+    throw new Error('Phiên đăng nhập không còn khớp quyền hiện tại. Vui lòng đăng nhập lại.');
   }
-  return { userId, tenantId: member.tenant_id, role: member.role };
+  return {
+    userId,
+    tenantId: member.tenant_id,
+    role: member.role as UserRole,
+    tenants: live.map((m) => ({ tenantId: m.tenant_id, role: m.role as UserRole })),
+  };
 }

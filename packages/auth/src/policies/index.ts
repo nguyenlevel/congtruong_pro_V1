@@ -18,6 +18,14 @@ const ROLE_PERMISSIONS: Record<UserRole, readonly Permission[]> = {
     'report.export',
   ],
   PROJECT_VIEWER: ['project.read', 'contractor.read', 'report.export'],
+  // Mirrors supabase/migrations/20260923000018_project_manager_role.sql. SITE_MANAGER is a legacy role and is kept as is.
+  PROJECT_MANAGER: [
+    'project.read',
+    'project.write',
+    'contractor.read',
+    'contractor.write',
+    'report.export',
+  ],
   SITE_MANAGER: [
     'project.read',
     'project.write',

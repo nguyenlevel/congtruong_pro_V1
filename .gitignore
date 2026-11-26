@@ -56,6 +56,9 @@ apps/web/dist
 # Generated types
 packages/database/src/generated
 
+# Reference repos (cloned third-party code for study only — never committed)
+/reference/
+
 # Misc
 .DS_Store
 *.pem

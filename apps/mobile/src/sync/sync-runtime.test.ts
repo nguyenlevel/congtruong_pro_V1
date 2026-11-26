@@ -30,6 +30,12 @@ function fakeOutbox(initial: LocalOutboxRecord[]): LocalSyncOutboxStore {
     async pending() {
       return records.filter((record) => record.status === 'pending');
     },
+    async countUnsynced() {
+      const unsynced = records.filter((record) => record.status !== 'committed');
+      const failed = unsynced.filter((record) => record.lastError !== null && record.status !== 'conflict').length;
+      const conflict = unsynced.filter((record) => record.status === 'conflict').length;
+      return { pending: unsynced.length - failed - conflict, failed, conflict, total: unsynced.length };
+    },
     async markCommitted(operationId) {
       const record = records.find((row) => row.operationId === operationId);
       if (record) record.status = 'committed';
@@ -48,9 +54,11 @@ function pendingLocalWrite(): LocalOutboxRecord {
   return {
     operationId: 'op-1',
     deviceId: 'device-1',
+    tenantId: TENANT,
+    projectId: null,
+    operation: 'update',
     recordType: 'worker',
     recordId: LOCAL_ID,
-    operation: 'update',
     payload: JSON.stringify(workerPayload(LOCAL_ID, 'Local edit').worker),
     version: 2,
     retryCount: 0,
@@ -108,6 +116,39 @@ describe('createWorkerSyncRuntime', () => {
     expect(cursors.get('cursor')).toBe('2026-09-23T01:00:00.000Z');
   });
 
+  it('keeps a write unsynced after a network failure and commits it on retry', async () => {
+    const record = pendingLocalWrite();
+    const outbox = fakeOutbox([record]);
+    const { store } = fakeWorkers();
+    let online = false;
+    const transport: SyncTransport = {
+      async push() {
+        if (!online) throw new Error('network down');
+        return { acknowledged: true, serverVersion: 3 };
+      },
+      async pull(request: PullRequest) {
+        return { cursor: request.cursor ?? 'start', records: [] };
+      },
+    };
+    const cursorStore = {
+      async read() {
+        return null;
+      },
+      async write() {},
+    };
+    const runtime = createWorkerSyncRuntime({ outbox, workers: store, transport, cursorStore });
+
+    await runtime.syncNow();
+    expect(await outbox.countUnsynced()).toMatchObject({ pending: 0, failed: 1, total: 1 });
+    expect(record.status).toBe('pending');
+    expect(record.retryCount).toBe(1);
+
+    online = true;
+    await runtime.syncNow();
+    expect(await outbox.countUnsynced()).toMatchObject({ total: 0 });
+    expect(record.status).toBe('committed');
+  });
+
   it('shares one run between concurrent syncNow calls', async () => {
     const countPulls = async (concurrent: boolean) => {
       let pulls = 0;
@@ -130,7 +171,7 @@ describe('createWorkerSyncRuntime', () => {
           },
           async setItemAsync() {},
           async deleteItemAsync() {},
-        }),
+        }, TENANT),
       });
       if (concurrent) {
         await Promise.all([runtime.syncNow(), runtime.syncNow()]);

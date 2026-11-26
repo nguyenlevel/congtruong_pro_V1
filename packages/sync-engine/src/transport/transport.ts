@@ -1,9 +1,18 @@
 import type { OutboxRecord } from '../outbox/outbox';
 import type { SyncCursor } from '../cursor/cursor';
 
+export interface PushConflict {
+  /** Version held by the server; 0 when the row is unknown or the conflict is a unique-key clash. */
+  serverVersion: number;
+  /** Server row in the same shape as a pulled record payload; null when there is none. */
+  serverPayload: unknown | null;
+}
+
 export interface PushResult {
   acknowledged: boolean;
   serverVersion: number;
+  /** Set when the server holds different data for the record (a real conflict, not a transient failure). */
+  conflict?: PushConflict;
 }
 
 export interface PullBatch {

@@ -89,6 +89,43 @@ describe('createSyncEngine', () => {
     expect(rows.get('op-4')!.status).toBe('pending');
   });
 
+  it('does not push later operations of a record after an earlier one failed', async () => {
+    const { outbox } = fakeOutbox([
+      record('op-7a', { recordId: 'w-same' }),
+      record('op-7b', { recordId: 'w-same', operation: 'update', version: 2 }),
+      record('op-7c', { recordId: 'w-other' }),
+    ]);
+    const push = vi.fn(async (_id: string, rec: OutboxRecord<unknown>) => {
+      if (rec.operationId === 'op-7a') throw new Error('network down');
+      return { acknowledged: true, serverVersion: rec.version };
+    });
+
+    const stats = await createSyncEngine({ outbox, transport: { push: push as SyncTransport['push'], pull: vi.fn() } }).flush();
+
+    expect(push.mock.calls.map(([id]) => id)).toEqual(['op-7a', 'op-7c']);
+    expect(stats).toMatchObject({ pushed: 1, errors: 1 });
+  });
+
+  it('parks a conflicting push as a conflict instead of retrying it', async () => {
+    const { outbox, rows } = fakeOutbox([record('op-6', { operation: 'update', version: 2 })]);
+    const markConflict = vi.fn(async (id: string) => {
+      rows.get(id)!.status = 'failed';
+    });
+    const transport: SyncTransport = {
+      push: async () => ({
+        acknowledged: false,
+        serverVersion: 3,
+        conflict: { serverVersion: 3, serverPayload: { worker: { id: 'w' } } },
+      }),
+      pull: vi.fn(),
+    };
+
+    const stats = await createSyncEngine({ outbox: { ...outbox, markConflict }, transport }).flush();
+
+    expect(stats).toMatchObject({ conflicts: 1, errors: 0, pushed: 0 });
+    expect(markConflict).toHaveBeenCalledWith('op-6', expect.stringContaining('version 3'), { worker: { id: 'w' } }, 3);
+  });
+
   it('applies pulled records and advances the cursor only from the server watermark', async () => {
     const applyRemote = vi.fn(async (_batch: PullBatch) => undefined);
     const transport: SyncTransport = {

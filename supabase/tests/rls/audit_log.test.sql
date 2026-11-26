@@ -43,17 +43,17 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$select public.write_audit('TEST', 'project', 'x', 'b2222222-2222-4222-8222-222222222222', null, null, '{}', null)$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', 'b2222222-2222-4222-8222-222222222222', null, null, '{}', null)$$,
   '42501', null, 'write_audit rejects an actor outside the target tenant'
 );
 
 select throws_ok(
-  $$select public.write_audit('TEST', 'project', 'x', 'b1111111-1111-4111-8111-111111111111', null, null, '{"full_name":"x"}', null)$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', 'b1111111-1111-4111-8111-111111111111', null, null, '{"full_name":"x"}', null)$$,
   '22023', null, 'write_audit rejects payload keys outside the allowlist'
 );
 
 select lives_ok(
-  $$select public.write_audit('TEST', 'project', 'x', 'b1111111-1111-4111-8111-111111111111', null, null, '{"reason":"ok"}', 'req-1')$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', 'b1111111-1111-4111-8111-111111111111', null, null, '{"reason":"ok"}', 'req-1')$$,
   'write_audit accepts an allowlisted payload from a tenant member'
 );
 

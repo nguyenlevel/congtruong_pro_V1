@@ -56,6 +56,11 @@ function fakeDatabase(): FakeDb {
     async pending() {
       return [...outboxRecords];
     },
+    async countUnsynced() {
+      const unsynced = outboxRecords.filter((record) => record.status !== 'committed');
+      const failed = unsynced.filter((record) => record.lastError !== null).length;
+      return { pending: unsynced.length - failed, failed, conflict: 0, total: unsynced.length };
+    },
     async markCommitted(operationId) {
       const record = outboxRecords.find((row) => row.operationId === operationId);
       if (record) record.status = 'committed';

@@ -44,51 +44,51 @@ select set_config('request.jwt.claims', '{"sub":"c1111111-1111-4111-8111-1111111
 set local role authenticated;
 
 select lives_ok(
-  $$select public.write_audit('REF', 'tenant', 'x', 'd1111111-1111-4111-8111-111111111111', null, null, '{"reason":"ok"}', 'ref-1')$$,
+  $$select public.write_audit('project_member.added', 'tenant', 'x', 'd1111111-1111-4111-8111-111111111111', null, null, '{"reason":"ok"}', 'ref-1')$$,
   'tenant-only scope is accepted for a tenant member'
 );
 
 select lives_ok(
-  $$select public.write_audit('REF', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111', null, '{"reason":"ok"}', 'ref-2')$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111', null, '{"reason":"ok"}', 'ref-2')$$,
   'project-only scope is accepted for a project member'
 );
 
 select lives_ok(
-  $$select public.write_audit('REF', 'project', 'x', 'd1111111-1111-4111-8111-111111111111', 'e1111111-1111-4111-8111-111111111111',
+  $$select public.write_audit('project_member.added', 'project', 'x', 'd1111111-1111-4111-8111-111111111111', 'e1111111-1111-4111-8111-111111111111',
       (select v from ref_ids where k = 'pc_p1'), '{"reason":"ok"}', 'ref-3')$$,
   'project_company that belongs to the project is accepted'
 );
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', 'd1111111-1111-4111-8111-111111111111', null,
+  $$select public.write_audit('project_member.added', 'project', 'x', 'd1111111-1111-4111-8111-111111111111', null,
       (select v from ref_ids where k = 'pc_p1'), '{"reason":"ok"}', 'ref-4')$$,
   '22023', null, 'project_company without project_id is rejected'
 );
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111',
+  $$select public.  write_audit('project_member.added', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111',
       (select v from ref_ids where k = 'pc_p2'), '{"reason":"ok"}', 'ref-5')$$,
   '22023', null, 'project_company of another project is rejected even when both exist'
 );
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111',
+  $$select public.  write_audit('project_member.added', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111',
       'ffffffff-ffff-4fff-8fff-ffffffffffff', '{"reason":"ok"}', 'ref-6')$$,
   '22023', null, 'non-existent project_company is rejected'
 );
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', 'd2222222-2222-4222-8222-222222222222', 'e1111111-1111-4111-8111-111111111111', null, '{"reason":"ok"}', 'ref-7')$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', 'd2222222-2222-4222-8222-222222222222', 'e1111111-1111-4111-8111-111111111111', null, '{"reason":"ok"}', 'ref-7')$$,
   '22023', null, 'tenant that does not own the project is rejected'
 );
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', null, 'e2222222-2222-4222-8222-222222222222', null, '{"reason":"ok"}', 'ref-8')$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', null, 'e2222222-2222-4222-8222-222222222222', null, '{"reason":"ok"}', 'ref-8')$$,
   '42501', null, 'actor who is not a member of the project is rejected'
 );
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', null, 'e3333333-3333-4333-8333-333333333333', null, '{"reason":"ok"}', 'ref-9')$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', null, 'e3333333-3333-4333-8333-333333333333', null, '{"reason":"ok"}', 'ref-9')$$,
   '22023', null, 'soft-deleted project is rejected'
 );
 
@@ -98,7 +98,7 @@ where user_id = 'c1111111-1111-4111-8111-111111111111' and project_id = 'e111111
 set local role authenticated;
 
 select throws_ok(
-  $$select public.write_audit('REF', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111', null, '{"reason":"ok"}', 'ref-10')$$,
+  $$select public.write_audit('project_member.added', 'project', 'x', null, 'e1111111-1111-4111-8111-111111111111', null, '{"reason":"ok"}', 'ref-10')$$,
   '42501', null, 'revoked project membership cannot write audit'
 );
 
